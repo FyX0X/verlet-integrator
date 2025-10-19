@@ -8,7 +8,8 @@ namespace Verlet
 	class Link
 	{
 	public:
-		Link(Point* p1, Point* p2, float stiffness = 1.0f);
+		// Create a link between two points with a given stiffness (1.0f = rigid, <1.0f = elastic)
+		Link(Point* p1, Point* p2, float stiffness = 1.0f, float initialTension = 1.f);
 
 		Point* getPoint1() const { return m_point1; }
 		Point* getPoint2() const { return m_point2; }

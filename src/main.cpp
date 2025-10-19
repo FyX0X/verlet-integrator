@@ -93,14 +93,92 @@ void initializeRigidStructure(Verlet::VerletIntegrator& integrator)
     integrator.addLink(mr, r4);
 }
 
+
+void createRope(Verlet::Point* start, Verlet::Point* end, int segments, Verlet::VerletIntegrator& integrator, float stiffness = 1.0f, float initialTension = 1.f)
+{
+	// create middle points
+	std::vector<Verlet::Point*> points;
+	points.push_back(start);
+    for (int i = 1; i < segments; ++i)
+    {
+        float t = static_cast<float>(i) / segments;
+        sf::Vector2f pos = (1 - t) * start->position + t * end->position;
+        points.push_back(integrator.addPoint(pos, false));
+	}
+	points.push_back(end);
+
+	// create links
+    for (size_t i = 0; i < points.size() - 1; ++i)
+    {
+        integrator.addLink(points[i], points[i + 1], stiffness, initialTension);
+	}
+}
+
+void initializeTensegrity(const sf::Vector2f& pos, float size, Verlet::VerletIntegrator& integrator)
+{
+
+    // Top structure
+    Verlet::Point* topLeft = integrator.addPoint({ pos.x, pos.y }, false);
+    Verlet::Point* topRight = integrator.addPoint({ pos.x + size, pos.y}, false);
+    Verlet::Point* topMid = integrator.addPoint({ pos.x + size / 2, pos.y}, false);
+	Verlet::Point* topRod = integrator.addPoint({ pos.x + size, pos.y + size * 0.66f }, false);
+	Verlet::Point* topHook = integrator.addPoint({ pos.x + size / 2, pos.y + size * 0.66f }, false); 
+
+	Verlet::Point* bottomLeft = integrator.addPoint({ pos.x, pos.y + size }, true);
+	Verlet::Point* bottomRight = integrator.addPoint({ pos.x + size, pos.y + size }, true);
+	Verlet::Point* bottomMid = integrator.addPoint({ pos.x + size / 2, pos.y + size }, false);
+	Verlet::Point* bottomRod = integrator.addPoint({ pos.x, pos.y + size * 0.33f }, false);
+	Verlet::Point* bottomHook = integrator.addPoint({ pos.x + size / 2, pos.y + size * .33f }, false);
+    
+    // Links for top structure
+    integrator.addLink(topLeft, topMid);
+    integrator.addLink(topMid, topRight);
+	integrator.addLink(topRight, topLeft);
+	integrator.addLink(topRight, topRod);
+	integrator.addLink(topRod, topMid);
+	integrator.addLink(topRight, topHook);
+	integrator.addLink(topRod, topHook);
+    
+
+	// Links for bottom structure
+	integrator.addLink(bottomLeft, bottomMid);
+	integrator.addLink(bottomMid, bottomRight);
+	integrator.addLink(bottomRight, bottomLeft);
+	integrator.addLink(bottomLeft, bottomRod);
+	integrator.addLink(bottomRod, bottomMid);
+	integrator.addLink(bottomLeft, bottomHook);
+	integrator.addLink(bottomRod, bottomHook);
+
+	// Vertical links
+	createRope(topLeft, bottomLeft, 5, integrator, 1.f, 1.2f);
+	createRope(topRight, bottomRight, 5, integrator, 1.f, 1.2f);
+	createRope(topHook, bottomHook, 5, integrator, 1.f);
+
+}
+
+void initializeRigid2(Verlet::VerletIntegrator& integrator)
+{
+    
+}
+
 void initializeScene(Verlet::VerletIntegrator& integrator)
 {
 
-	initializeRigidStructure(integrator);
-	initializeGrid({ 400.f, 50.f }, 10, 10, 40.f, integrator);
+	//initializeRigidStructure(integrator);
+	//initializeGrid({ 400.f, 50.f }, 10, 10, 40.f, integrator);
+	
+    //initializeGrid({ 10, 10 }, 50, 50, 10.f, integrator);
 
-    printAllPoints(integrator);
-	printAllLinks(integrator);
+	initializeTensegrity({ 400.f, 50.f }, 100.f, integrator); 
+
+
+	// Rope
+	Verlet::Point* ropeStart = integrator.addPoint({ 600.f, 50.f }, true);
+	Verlet::Point* ropeEnd = integrator.addPoint({ 600.f, 300.f }, false);
+	createRope(ropeStart, ropeEnd, 20, integrator, 0.5f, 0.9f);
+
+ //   printAllPoints(integrator);
+	//printAllLinks(integrator);
 }
 
 
@@ -109,7 +187,7 @@ int main()
     auto window = sf::RenderWindow(sf::VideoMode({800u, 600u}), "Verlet Integrator");
     window.setFramerateLimit(144);
 
-	Verlet::VerletIntegrator integrator(1.f / 60);        // 60 FPS, default gravity = 9.81 m/s^2
+	Verlet::VerletIntegrator integrator(1.f / 60, {0.f, 9.81f}, 0.999f, 100000);        // 60 FPS, default gravity = 9.81 m/s^2
 	initializeScene(integrator);
 
 	Verlet::Renderer renderer(integrator);
@@ -127,22 +205,44 @@ int main()
 
 
 		// drag points with mouse
+		static bool wasLeftPressed = false;
+		static Verlet::Point* selectedPoint = nullptr;
         if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
         {
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
             sf::Vector2f mousePosF(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
-            for (Verlet::Point& p : integrator.getPoints())
-            {
-                if (p.isPinned)
-                    continue;
-				sf::Vector2f delta = p.position - mousePosF;
-                if (delta.lengthSquared() < 200.0f) // if mouse is close to point
+
+			if (!wasLeftPressed) { // find ONE close point only once when the mouse button is first pressed
+				wasLeftPressed = true;
+
+                for (Verlet::Point& p : integrator.getPoints())
                 {
-                    p.position = mousePosF;
-                    p.previousPosition = mousePosF; // uncomment to disable inertia when dragging
+                    if (p.isPinned)
+                        continue;
+                    sf::Vector2f delta = p.position - mousePosF;
+                    if (delta.lengthSquared() < 200.0f) // if mouse is close to point
+                    {
+						selectedPoint = &p;
+                        p.position = mousePosF;
+                        //p.previousPosition = mousePosF; // uncomment to disable inertia when dragging
+                        break; // only drag one point at a time
+                    }
+                }
+
+
+            }
+            else {
+                if (selectedPoint) {
+                    selectedPoint->position = mousePosF;
+                    //selectedPoint->previousPosition = mousePosF; // uncomment to disable inertia when dragging
                 }
             }
-		}
+
+        }
+        else {
+			wasLeftPressed = false;
+			selectedPoint = nullptr;
+        }
 
 		// Right click to remove links near mouse
         if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right))
@@ -157,6 +257,12 @@ int main()
                     sf::Vector2f delta = midPoint - mousePosF;
                     return delta.lengthSquared() < 100.0f; // if mouse is close to midpoint of link
                 }), links.end());
+		}
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R))
+        {
+            integrator.clearScene();
+            initializeScene(integrator);
 		}
 
 

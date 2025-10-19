@@ -3,13 +3,13 @@
 
 namespace Verlet
 {
-	Link::Link(Point* p1, Point* p2, float stiffness)
+	Link::Link(Point* p1, Point* p2, float stiffness, float initialTension)
 	{
 		m_point1 = p1;
 		m_point2 = p2;
 		m_stiffness = stiffness;
 		sf::Vector2f delta = m_point2->position - m_point1->position;
-		m_restLength = delta.length();
+		m_restLength = delta.length() / initialTension;
 	}
 
 

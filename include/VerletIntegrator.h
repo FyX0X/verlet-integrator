@@ -15,11 +15,12 @@ namespace Verlet {
 
 		// Scene management
 		Point* addPoint(const sf::Vector2f& pos, bool isPinned);
-		Link* addLink(Point* p1, Point* p2);
+		Link* addLink(Point* p1, Point* p2, float stiffness = 1.0f, float initialTension = 1.f);
 		const std::vector<Point>& getPoints() const { return m_points; }
 		std::vector<Point>& getPoints() { return m_points; }
 		const std::vector<Link>& getLinks() const { return m_links; }
 		std::vector<Link>& getLinks() { return m_links; }
+		void clearScene();
 
 		
 		// Physics parameters
