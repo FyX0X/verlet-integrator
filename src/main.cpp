@@ -2,6 +2,10 @@
 #include "VerletIntegrator.h"
 #include "Renderer.h"
 #include <iostream>
+#include <algorithm>
+#include <optional>
+#include <string>
+#include <sstream>
 
 
 void printAllPoints(const Verlet::VerletIntegrator& integrator)
@@ -156,26 +160,91 @@ void initializeTensegrity(const sf::Vector2f& pos, float size, Verlet::VerletInt
 
 }
 
-void initializeRigid2(Verlet::VerletIntegrator& integrator)
+void initializeBracedGrid(sf::Vector2f origin, float spacing, const std::vector<std::vector<bool>>& braced, Verlet::VerletIntegrator& integrator)
 {
+    int rows = braced.size() + 1;
+    int cols = braced.front().size() + 1;
+
+
+    std::vector<Verlet::Point*> points;
+    points.reserve(rows * cols);
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            bool isPinned = (y == 0) && (x >= cols/2); // Pins half of the top row of points
+            points.push_back(integrator.addPoint({ origin.x + x * spacing, origin.y + y * spacing }, isPinned));
+        }
+    }
+    // Create links
+    for (int y = 0; y < rows; ++y)
+    {
+        for (int x = 0; x < cols; ++x)
+        {
+            bool not_horizontal_border = x < cols - 1;
+            bool not_vertical_border = y < rows - 1;
+            if (not_horizontal_border)
+                integrator.addLink(points[y * cols + x], points[y * cols + (x + 1)]); // Horizontal link
+            if (not_vertical_border)
+                integrator.addLink(points[y * cols + x], points[(y + 1) * cols + x]); // Vertical link
+            
+            if (not_horizontal_border && not_vertical_border && braced[y][x]) {
+
+                integrator.addLink(points[y * cols + x], points[(y+1) * cols + (x + 1)]); // Horizontal link
+            }
+        }
+    }
+
+}
+
+std::vector<std::vector<bool>> create_grid_from_pattern(const std::string& pattern, int& r, int& c, int& brace_count) {
     
+    std::stringstream ss(pattern);
+    ss >> r >> c;
+    std::vector<std::vector<bool>> grid(r, std::vector<bool>(c, false));
+
+    brace_count = 0;
+    for (size_t i = 0; i < r; i++)
+    {
+        for (size_t j = 0; j < c; j++)
+        {
+            char b;
+            ss >> b;
+            int brace = b == '1' ? 1 : 0;
+            grid[i][j] = brace;
+            brace_count += brace;
+        }
+    }
+    return grid;
 }
 
 void initializeScene(Verlet::VerletIntegrator& integrator)
 {
 
-	//initializeRigidStructure(integrator);
-	//initializeGrid({ 400.f, 50.f }, 10, 10, 40.f, integrator);
-	
-    //initializeGrid({ 10, 10 }, 50, 50, 10.f, integrator);
+	// initializeRigidStructure(integrator);
+	// initializeGrid({ 400.f, 50.f }, 10, 10, 40.f, integrator);
 
-	initializeTensegrity({ 400.f, 50.f }, 100.f, integrator); 
+    static const std::string kBracePattern = 
+    "5 5\n"
+    "10111\n"
+    "10000\n"
+    "10001\n"
+    "00001\n"
+    "11101\n";
+
+    int r, c, brace_count;
+    std::vector<std::vector<bool>> braced = create_grid_from_pattern(kBracePattern, r, c, brace_count);
+    initializeBracedGrid({ 40.f, 50.f }, 40.f, braced, integrator);
+	
+    // initializeGrid({ 10, 10 }, 50, 50, 10.f, integrator);
+
+	// initializeTensegrity({ 400.f, 50.f }, 100.f, integrator); 
 
 
 	// Rope
-	Verlet::Point* ropeStart = integrator.addPoint({ 600.f, 50.f }, true);
-	Verlet::Point* ropeEnd = integrator.addPoint({ 600.f, 300.f }, false);
-	createRope(ropeStart, ropeEnd, 20, integrator, 0.5f, 0.9f);
+	// Verlet::Point* ropeStart = integrator.addPoint({ 600.f, 50.f }, true);
+	// Verlet::Point* ropeEnd = integrator.addPoint({ 600.f, 300.f }, false);
+	// createRope(ropeStart, ropeEnd, 20, integrator, 0.5f, 0.9f);
 
  //   printAllPoints(integrator);
 	//printAllLinks(integrator);
